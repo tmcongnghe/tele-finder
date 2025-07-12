@@ -4,11 +4,16 @@ from flask import Flask, request, render_template_string
 from telethon import TelegramClient
 from telethon.tl.types import User
 import pytz
+import os # Thêm dòng này ở đầu file
 
-# --- CẤU HÌNH (Điền thông tin của bạn vào đây) ---
-api_id = 26594850  # THAY BẰNG API ID CỦA BẠN
-api_hash = 'e441160135dafb81ff5770ebbf9aa141' # THAY BẰNG API HASH CỦA BẠN
+# --- CẤU HÌNH ---
+# Lấy thông tin nhạy cảm từ Biến Môi Trường
+api_id = os.environ.get('TELEGRAM_API_ID')
+api_hash = os.environ.get('TELEGRAM_API_HASH')
 session_name = 'my_web_telegram_session'
+# --- CẤU HÌNH (Điền thông tin của bạn vào đây) ---
+
+
 
 app = Flask(__name__)
 VN_TZ = pytz.timezone('Asia/Ho_Chi_Minh')
