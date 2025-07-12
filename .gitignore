@@ -1,0 +1,9 @@
+# Môi trường ảo
+venv/
+
+# File session của Telethon
+*.session
+*.session-journal
+
+# Thư mục cache của Python
+__pycache__/
