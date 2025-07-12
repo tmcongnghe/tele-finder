@@ -2,8 +2,11 @@
 venv/
 
 # File session của Telethon
-*.session
+# *.session
 *.session-journal
 
 # Thư mục cache của Python
 __pycache__/
+
+# File biến môi trường cục bộ
+.env
