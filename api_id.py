@@ -40,25 +40,6 @@ def get_gspread_client():
         print(f"Lỗi khi xác thực Google Sheet: {e}")
         return None
 
-def log_to_google_sheet(data_rows):
-    if not GOOGLE_SHEET_URL: return
-    client = get_gspread_client()
-    if client:
-        try:
-            sheet = client.open_by_url(GOOGLE_SHEET_URL).sheet1
-            rows_to_append = []
-            for item in data_rows:
-                rows_to_append.append([
-                    item.get('search_keyword'), item.get('primary_price_str'), item.get('price_value'),
-                    item.get('sender_name'), item.get('sender_username', ''), item.get('date'),
-                    item.get('content'), item.get('link')
-                ])
-            if rows_to_append:
-                sheet.append_rows(rows_to_append, value_input_option='USER_ENTERED')
-                print(f"Đã ghi {len(rows_to_append)} dòng vào Google Sheet.")
-        except Exception as e:
-            print(f"Lỗi khi ghi vào Google Sheet: {e}")
-
 def search_in_google_sheet(keyword):
     """
     Tìm kiếm từ khóa trong Google Sheet, bắt đầu từ hàng thứ 4.
@@ -72,21 +53,15 @@ def search_in_google_sheet(keyword):
         if not client: return [], "Không thể xác thực với Google Sheet."
         sheet = client.open_by_url(GOOGLE_SHEET_URL).sheet1
 
-        # Lấy tất cả giá trị dưới dạng danh sách thô, không dùng tiêu đề
         all_data = sheet.get_all_values()
-
-        # Bỏ qua 3 hàng đầu tiên, bắt đầu từ hàng 4 (trong Python, index là 3)
-        data_rows = all_data[3:]
+        data_rows = all_data[3:] # Bỏ qua 3 hàng đầu tiên
 
         found_results = []
         for row in data_rows:
-            # Lấy dữ liệu theo vị trí cột: Tên sản phẩm ở cột B (index 1), Giá ở cột D (index 3)
-            # Thêm kiểm tra để đảm bảo hàng có đủ cột
+            # Tên sản phẩm ở cột B (index 1), Giá ở cột D (index 3)
             if len(row) > 3:
                 product_name = row[1]
                 price = row[3]
-
-                # So sánh không phân biệt chữ hoa/thường
                 if keyword.lower() in product_name.lower():
                     found_results.append({
                         "product_name": product_name,
@@ -100,7 +75,7 @@ def search_in_google_sheet(keyword):
 
 # --- GIAO DIỆN WEB (HTML) ---
 LOGIN_TEMPLATE = """<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Đăng nhập</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f2f5;}form{background:white;padding:40px;border-radius:8px;box-shadow:0 4px 8px rgba(0,0,0,0.1);width:300px;}h2{text-align:center;margin-bottom:20px;}input{width:100%;padding:10px;margin-bottom:15px;border:1px solid #ccc;border-radius:4px;}button{width:100%;padding:10px;border:none;background:#007bff;color:white;border-radius:4px;cursor:pointer;}.error{color:red;text-align:center;margin-bottom:10px;}</style></head><body><form method="post"><h2>Đăng nhập</h2>{% if error %}<p class="error">{{ error }}</p>{% endif %}<input type="password" name="password" placeholder="Mật khẩu" required><button type="submit">Vào</button></form></body></html>"""
-MAIN_TEMPLATE = """<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><title>Telegram & Sheet Price Finder</title><style>body{font-family:sans-serif;background-color:#f4f7f9;margin:20px;}.container{max-width:800px;margin:auto;background:white;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}h1,h2,h3{text-align:center;color:#333;}form{display:flex;flex-direction:column;gap:15px;}input,button{padding:10px;border-radius:5px;border:1px solid #ccc;font-size:16px;}button{background-color:#007bff;color:white;cursor:pointer;border:none;}.results{margin-top:20px;border-top: 2px solid #ccc;padding-top: 20px;}.result-item{border:1px solid #ddd;padding:15px;margin-bottom:15px;border-radius:5px;background:#f9f9f9;}.content{white-space:pre-wrap;word-wrap:break-word;}.price-highlight{font-weight:bold;color:#d9534f;background-color:#fcf8e3;padding:2px 5px;border-radius:3px;}.meta{color:#555;font-size:0.9em;margin-top:10px;border-top:1px solid #eee;padding-top:10px;}.error{color:red;text-align:center;}.loader{text-align:center;display:none;margin-top:20px;}.logout{text-align:right;margin-bottom:10px;}.sheet-result .product{font-weight:bold;} .sheet-result .price{color:#28a745;}</style></head><body><div class="container"><div class="logout"><a href="/logout">Đăng xuất</a></div><h1>🔍 Công cụ tìm giá đa năng</h1><form action="/search" method="post" onsubmit="document.querySelector('.loader').style.display='block'"><input type="text" name="channel" placeholder="@username hoặc ID kênh Telegram" required value="{{ channel or '' }}"><input type="text" name="topic_id" placeholder="ID Topic Telegram (nếu có)" value="{{ topic_id or '' }}"><input type="text" name="keywords" placeholder="Từ khóa tìm kiếm (VD: netflix)" required value="{{ keyword or '' }}"><input type="number" name="limit" value="{{ limit or 2000 }}" placeholder="Số tin nhắn gần nhất để quét"><button type="submit">Tìm kiếm Tất cả</button></form><div class="loader"><p><strong>Đang tìm kiếm, vui lòng chờ...</strong></p></div>{% if error %}<p class="error">{{ error }}</p>{% endif %}{% if sheet_results is not none %}<div class="results"><h3>Giá riêng từ Google Sheet</h3>{% for item in sheet_results %}<div class="result-item sheet-result"><p><span class="product">{{ item.product_name }}</span>: <span class="price">{{ item.price }}</span></p></div>{% else %}{% if request.method == 'POST' %}<p>Không tìm thấy '{{ keyword }}' trong Google Sheet.</p>{% endif %}{% endfor %}</div>{% endif %}{% if telegram_results is not none %}<div class="results"><h3>Kết quả từ Telegram</h3>{% for item in telegram_results %}<div class="result-item"><div class="content"><p>Giá tốt nhất: <span class="price-highlight">{{ item.primary_price_str }}</span></p><p>{{ item.content }}</p></div><div class="meta">Đăng bởi: {% if item.sender_username %}<a href="https://t.me/{{ item.sender_username }}" target="_blank">@{{ item.sender_username }}</a>{% else %}<strong>{{ item.sender_name }}</strong>{% endif %}<br>Lúc: {{ item.date }}<br><a href="{{ item.link }}" target="_blank">Xem tin nhắn gốc</a></div></div>{% else %}{% if request.method == 'POST' %}<p>Không tìm thấy '{{ keyword }}' trên Telegram.</p>{% endif %}{% endfor %}</div>{% endif %}</div></body></html>"""
+MAIN_TEMPLATE = """<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><title>Telegram & Sheet Price Finder</title><style>body{font-family:sans-serif;background-color:#f4f7f9;margin:20px;}.container{max-width:800px;margin:auto;background:white;padding:20px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}h1,h2,h3{text-align:center;color:#333;}form{display:flex;flex-direction:column;gap:15px;}input,button{padding:10px;border-radius:5px;border:1px solid #ccc;font-size:16px;}button{background-color:#007bff;color:white;cursor:pointer;border:none;}.results{margin-top:20px;border-top: 2px solid #ccc;padding-top: 20px;}.result-item{border:1px solid #ddd;padding:15px;margin-bottom:15px;border-radius:5px;background:#f9f9f9;}.content{white-space:pre-wrap;word-wrap:break-word;}.price-highlight{font-weight:bold;color:#d9534f;background-color:#fcf8e3;padding:2px 5px;border-radius:3px;}.meta{color:#555;font-size:0.9em;margin-top:10px;border-top:1px solid #eee;padding-top:10px;}.error{color:red;text-align:center;}.loader{text-align:center;display:none;margin-top:20px;}.logout{text-align:right;margin-bottom:10px;}.sheet-result .product{font-weight:bold;} .sheet-result .price{color:#28a745;}</style></head><body><div class="container"><div class="logout"><a href="/logout">Đăng xuất</a></div><h1>🔍 Công cụ tìm giá đa năng</h1><form action="/search" method="post" onsubmit="document.querySelector('.loader').style.display='block'"><input type="text" name="channel" placeholder="@username hoặc ID kênh Telegram" required value="{{ channel or '' }}"><input type="text" name="topic_id" placeholder="ID Topic Telegram (nếu có)" value="{{ topic_id or '' }}"><input type="text" name="keywords" placeholder="Từ khóa tìm kiếm (VD: netflix)" required value="{{ keyword or '' }}"><input type="number" name="limit" value="{{ limit or 2000 }}" placeholder="Số tin nhắn gần nhất để quét"><button type="submit">Tìm kiếm Tất cả</button></form><div class="loader"><p><strong>Đang tìm kiếm, vui lòng chờ...</strong></p></div>{% if error %}<p class="error">{{ error }}</p>{% endif %}<!-- === KHU VỰC KẾT QUẢ GOOGLE SHEET === -->{% if sheet_results is not none %}<div class="results"><h3>Giá riêng từ Google Sheet</h3>{% for item in sheet_results %}<div class="result-item sheet-result"><p><span class="product">{{ item.product_name }}</span>: <span class="price">{{ item.price }}</span></p></div>{% else %}{% if request.method == 'POST' %}<p>Không tìm thấy '{{ keyword }}' trong Google Sheet.</p>{% endif %}{% endfor %}</div>{% endif %}<!-- === KHU VỰC KẾT QUẢ TELEGRAM === -->{% if telegram_results is not none %}<div class="results"><h3>Kết quả từ Telegram</h3>{% for item in telegram_results %}<div class="result-item"><div class="content"><p>Giá tốt nhất: <span class="price-highlight">{{ item.primary_price_str }}</span></p><p>{{ item.content }}</p></div><div class="meta">Đăng bởi: {% if item.sender_username %}<a href="https://t.me/{{ item.sender_username }}" target="_blank">@{{ item.sender_username }}</a>{% else %}<strong>{{ item.sender_name }}</strong>{% endif %}<br>Lúc: {{ item.date }}<br><a href="{{ item.link }}" target="_blank">Xem tin nhắn gốc</a></div></div>{% else %}{% if request.method == 'POST' %}<p>Không tìm thấy '{{ keyword }}' trên Telegram.</p>{% endif %}{% endfor %}</div>{% endif %}</div></body></html>"""
 
 # --- LOGIC XỬ LÝ GIÁ VÀ TELEGRAM ---
 def get_valid_prices(text_line):
@@ -213,8 +188,9 @@ def search():
                 item['search_keyword'] = keyword
                 telegram_results.append(item)
                 seen_senders.add(sender_id)
-    if telegram_results:
-        log_to_google_sheet(telegram_results)
+    
+    # Dòng gọi hàm log_to_google_sheet đã được xóa
+    
     return render_template_string(MAIN_TEMPLATE, sheet_results=sheet_results, telegram_results=telegram_results,
                                   keyword=keyword, channel=channel, topic_id=topic_id_str, keywords_str=keyword, limit=limit)
 
